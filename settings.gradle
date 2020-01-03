@@ -1,0 +1,1 @@
+include ':sdk', ':crosspl', ':Elastos.SDK.Contact', ':PeerNodeSDK', ':test', ':ElastosSdkKeypair'
