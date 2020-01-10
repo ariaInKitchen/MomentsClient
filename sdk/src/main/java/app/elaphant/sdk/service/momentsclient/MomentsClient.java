@@ -40,6 +40,9 @@ public class MomentsClient {
                 case StatusChanged:
                     Contact.Listener.StatusEvent statusEvent = (Contact.Listener.StatusEvent)event;
                     Log.d(TAG, statusEvent.humanCode + " status changed " + statusEvent.status);
+                    if (mListener != null) {
+                        mListener.onStatusChanged(statusEvent.humanCode, statusEvent.status);
+                    }
                     break;
                 case HumanInfoChanged:
                     Contact.Listener.InfoEvent infoEvent = (Contact.Listener.InfoEvent) event;
@@ -60,8 +63,7 @@ public class MomentsClient {
             }
 
             try {
-                JSONObject jsonObject = new JSONObject(message.data.toString());
-                JSONObject content = jsonObject.getJSONObject("content");
+                JSONObject content = new JSONObject(message.data.toString());
                 String command = content.getString("command");
                 if (command.equals("pushData")) {
                     mListener.onPushData(s, content.getInt("type"), content.getJSONArray("content"));
@@ -84,6 +86,8 @@ public class MomentsClient {
                     mListener.onFriendRequest(s, content.getString("friendCode"), content.getString("summary"));
                 } else if (command.equals("getFollowList")) {
                     mListener.onGetFollowList(s, content.getJSONArray("content"));
+                }  else if (command.equals("newFollow")) {
+                    mListener.onNewFollow(s, content.getString("friendCode"));
                 } else {
                     Log.e(TAG, "not support command: " + command);
                 }
@@ -111,13 +115,11 @@ public class MomentsClient {
             Log.e(TAG, "node is not online");
             return -1;
         }
-        JSONObject json = new JSONObject();
+
         try {
-            json.put("serviceName", SERVICE_NAME);
             JSONObject content = new JSONObject();
             content.put("command", command);
-            json.put("content", content);
-            return mConnector.addFriend(did, json.toString());
+            return mConnector.addFriend(did, content.toString());
         } catch (JSONException e) {
             e.printStackTrace();
         }
@@ -223,10 +225,7 @@ public class MomentsClient {
             return -1;
         }
 
-        JSONObject json = new JSONObject();
-        json.put("serviceName", SERVICE_NAME);
-        json.put("content", content);
-        return mConnector.sendMessage(friendCode, Contact.MakeTextMessage(json.toString(), null));
+        return mConnector.sendMessage(friendCode, content.toString());
     }
 
     public interface Listener {
@@ -240,5 +239,8 @@ public class MomentsClient {
         void onClearResult(String did, int result);
         void onFriendRequest(String did, String friendCode, String summary);
         void onGetFollowList(String did, JSONArray array);
+        void onNewFollow(String did, String friendCode);
+
+        void onStatusChanged(String did, Contact.Status status);
     }
 }

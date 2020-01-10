@@ -1,4 +1,5 @@
 <resources>
-    <string name="app_name">test</string>
-    <string name="action_settings">加关注</string>
+    <string name="app_name">朋友圈</string>
+    <string name="action_settings">设置</string>
+    <string name="action_follow">加关注</string>
 </resources>

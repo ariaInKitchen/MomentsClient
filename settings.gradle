@@ -1,1 +1,1 @@
-include ':sdk', ':crosspl', ':Elastos.SDK.Contact', ':PeerNodeSDK', ':test', ':ElastosSdkKeypair'
+include ':sdk', ':test', ':ElastosSdkKeypair', ':PeerNodeSDK', ':crosspl-lib-v0.1.215', ':Elastos.SDK.Contact-v0.1.215'

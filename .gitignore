@@ -83,3 +83,12 @@ lint/generated/
 lint/outputs/
 lint/tmp/
 # lint/reports/
+
+.idea/
+.DS_Store
+
+sdk/libs
+
+.classpath
+.project
+.settings
