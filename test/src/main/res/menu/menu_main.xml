@@ -8,8 +8,24 @@
         android:title="@string/action_settings"
         app:showAsAction="never" />
     <item
+        android:id="@+id/action_create"
+        android:orderInCategory="100"
+        android:title="@string/action_create"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_follow"
         android:orderInCategory="100"
         android:title="@string/action_follow"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_create_account"
+        android:orderInCategory="100"
+        android:title="@string/action_create_account"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_did"
+        android:orderInCategory="100"
+        android:title="@string/action_did"
         app:showAsAction="never" />
 </menu>

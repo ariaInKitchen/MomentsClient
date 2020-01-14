@@ -10,7 +10,6 @@
     tools:showIn="@layout/activity_main">
 
     <LinearLayout
-        android:id="@+id/my_moments_panel"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
@@ -29,10 +28,11 @@
             android:layout_height="1dp"
             android:background="@color/cardview_shadow_start_color"/>
         <LinearLayout
+            android:id="@+id/my_moments_panel"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="45dp"
+            android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:layout_marginTop="5dp"
             android:layout_marginBottom="5dp">
             <TextView
                 android:id="@+id/my_moments"

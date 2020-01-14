@@ -140,13 +140,13 @@ public class MomentsClient {
         return -2;
     }
 
-    public int publishText(String did, String content, String access) {
+    public int publishText(String did, String content, long time, String access) {
         JSONObject contentObj = new JSONObject();
         try {
             contentObj.put("command", "publish");
             contentObj.put("type", 1);
             contentObj.put("content", content);
-            contentObj.put("time", new Date().getTime() * 1000);
+            contentObj.put("time", time);
             contentObj.put("access", access);
             return sendCommand(did, contentObj);
         } catch (JSONException e) {

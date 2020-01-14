@@ -1,9 +1,13 @@
 package app.elaphant.sdk.service.momentsclient.test;
 
 import android.app.Activity;
+import android.content.ComponentName;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.preference.PreferenceManager;
 import android.provider.Settings;
 import android.support.design.widget.FloatingActionButton;
 import android.support.v7.app.AlertDialog;
@@ -13,6 +17,7 @@ import android.util.Log;
 import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.widget.AdapterView;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -23,6 +28,7 @@ import com.google.gson.Gson;
 import org.elastos.sdk.elephantwallet.contact.Contact;
 import org.elastos.sdk.elephantwallet.contact.Utils;
 import org.elastos.sdk.keypair.ElastosKeypair;
+import org.elastos.sdk.keypair.ElastosKeypairDID;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -36,16 +42,18 @@ public class MainActivity extends AppCompatActivity {
     private static String TAG = "MomentsTest";
 
     private static final int REQUEST_CODE_QR_SCAN = 101;
+    private static final String MNEMONIC_KEY = "mnemonic";
 
     private static final String mnemonic = "ability cloth cannon buddy together theme uniform erase fossil meadow top pumpkin";
     private static final String mPrivateKey = "b8e923f4e5c5a3c704bcc02a90ee0e4fa34a5b8f0dd1de1be4eb2c37ffe8e3ea";
     private static final String mPublicKey = "021e53dc2b8af1548175cba357ae321096065f8d49e3935607bc8844c157bb0859";
 
 
+    private String mMnemonic;
     private PeerNode mPeerNode;
     private MomentsClient mMomentsClient;
 
-    private DatabaseHelper mDbHelper = DatabaseHelper.getInstance(this);
+    private DatabaseHelper mDbHelper;
 
     private MomentsItem mMyMoments;
     private List<MomentsItem> mFollowList;
@@ -64,13 +72,16 @@ public class MainActivity extends AppCompatActivity {
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
-        FloatingActionButton fab = findViewById(R.id.fab);
-        fab.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                scan("create");
-            }
-        });
+        SharedPreferences pref = PreferenceManager.getDefaultSharedPreferences(this);
+        mMnemonic = pref.getString(MNEMONIC_KEY, null);
+        Log.d(TAG, "mnemonic: " + mMnemonic);
+        if (mMnemonic == null) {
+            mMnemonic = mnemonic;
+        } else {
+            String did = getDID();
+            DatabaseHelper.DATABASE_NAME = "moments_" + did + ".db";
+        }
+        mDbHelper = DatabaseHelper.getInstance(this);
 
         InitPeerNode();
         InitMoments();
@@ -109,9 +120,33 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 Toast.makeText(MainActivity.this, "还未创建朋友圈", Toast.LENGTH_LONG).show();
             }
+        } else if (id == R.id.action_create_account) {
+            createNewAccount();
+        } else if (id == R.id.action_did) {
+            showDID();
+        } else if (id == R.id.action_create) {
+            scan("create");
         }
 
         return super.onOptionsItemSelected(item);
+    }
+
+    private String getPublicKey() {
+        ElastosKeypair.Data seedData = new ElastosKeypair.Data();
+        int seedSize = ElastosKeypair.getSeedFromMnemonic(seedData, mMnemonic,
+                "english", "", "");
+        return ElastosKeypair.getSinglePublicKey(seedData, seedSize);
+    }
+
+    private String getPrivateKey() {
+        ElastosKeypair.Data seedData = new ElastosKeypair.Data();
+        int seedSize = ElastosKeypair.getSeedFromMnemonic(seedData, mMnemonic,
+                "english", "", "");
+        return ElastosKeypair.getSinglePrivateKey(seedData, seedSize);
+    }
+
+    private String getDID() {
+        return ElastosKeypairDID.getDid(getPublicKey());
     }
 
     private void InitPeerNode() {
@@ -124,7 +159,7 @@ public class MainActivity extends AppCompatActivity {
                 byte[] response = null;
                 switch (request.type) {
                     case PublicKey:
-                        response = mPublicKey.getBytes();
+                        response = getPublicKey().getBytes();
                         break;
                     case EncryptData:
                         response = request.data;
@@ -173,7 +208,7 @@ public class MainActivity extends AppCompatActivity {
 
         ElastosKeypair.Data signedData = new ElastosKeypair.Data();
 
-        int signedSize = ElastosKeypair.sign(mPrivateKey, originData, originData.buf.length, signedData);
+        int signedSize = ElastosKeypair.sign(getPrivateKey(), originData, originData.buf.length, signedData);
         if(signedSize <= 0) {
             return null;
         }
@@ -191,7 +226,7 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onPublishResult(String did, long time, int result) {
-
+                handlePublishResult(did, time, result);
             }
 
             @Override
@@ -216,7 +251,7 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onDeleteResult(String did, int id, int result) {
-
+                handleDeleteResult(did, id, result);
             }
 
             @Override
@@ -262,7 +297,23 @@ public class MainActivity extends AppCompatActivity {
         mFollowList = mDbHelper.getFollowList();
         mAdapter = new Adapter(this, R.layout.moments_item, mFollowList);
         mFollowListView.setAdapter(mAdapter);
+        mFollowListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                Intent intent = new Intent(MainActivity.this, RecordsActivity.class);
+                intent.putExtra(RecordsActivity.MOMENTS_ITEM, new Gson().toJson(mFollowList.get(position)));
+                startActivity(intent);
+            }
+        });
 
+        findViewById(R.id.my_moments_panel).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent(MainActivity.this, RecordsActivity.class);
+                intent.putExtra(RecordsActivity.MOMENTS_ITEM, new Gson().toJson(mMyMoments));
+                startActivity(intent);
+            }
+        });
     }
 
     private void scan(String type) {
@@ -335,6 +386,63 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    private void createNewAccount() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("创建一个新的账户？");
+        builder.setPositiveButton("Ok", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                dialog.dismiss();
+                createAccount();
+            }
+        });
+        builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                dialog.dismiss();
+            }
+        });
+        builder.create().show();
+    }
+
+    private void showDID() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("我的DID");
+        builder.setMessage(getDID());
+        builder.setPositiveButton("Ok", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                dialog.dismiss();
+            }
+        });
+        builder.create().show();
+    }
+
+    private void createAccount() {
+        String mne = ElastosKeypair.generateMnemonic("english", "");
+        Log.d(TAG, "new mnemonic: " + mne);
+        SharedPreferences pref = PreferenceManager.getDefaultSharedPreferences(this);
+        SharedPreferences.Editor editor = pref.edit();
+        editor.putString(MNEMONIC_KEY, mne).apply();
+
+        mDbHelper.close();
+        mPeerNode.stop();
+
+        // restart app;
+        try {
+            Thread.sleep(200);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        PackageManager packageManager = getPackageManager();
+        Intent intent = packageManager.getLaunchIntentForPackage(getPackageName());
+        assert intent != null;
+        ComponentName componentName = intent.getComponent();
+        Intent mainIntent = Intent.makeRestartActivityTask(componentName);
+        startActivity(mainIntent);
+        Runtime.getRuntime().exit(0);
+    }
+
     private void handleRequest(final String did, final String friendCode, final String summary) {
         if (mMyMoments == null || !did.equals(mMyMoments.mDid)) {
             Log.e(TAG, "Request from moments " + did + " not mine");
@@ -396,6 +504,51 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void run() {
                 Toast.makeText(MainActivity.this, "新的朋友 " + friendCode + " 关注了你", Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    private void handlePublishResult(String did, long time, int result) {
+        if (mMyMoments == null || !did.equals(mMyMoments.mDid)) {
+            Log.e(TAG, "publish result from moments " + did + " not mine");
+            return;
+        }
+
+        final String text;
+        if (result < 0) {
+            text = "发布动态失败";
+            mDbHelper.removeRecord(did, time);
+        } else {
+            text = "发布动态成功";
+            mDbHelper.updateRecordUid(did, time, result);
+        }
+
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                Toast.makeText(MainActivity.this, text, Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    private void handleDeleteResult(String did, int id, int result) {
+        if (mMyMoments == null || !did.equals(mMyMoments.mDid)) {
+            Log.e(TAG, "publish result from moments " + did + " not mine");
+            return;
+        }
+
+        final String text;
+        if (result == 0) {
+            text = "删除成功";
+            mDbHelper.removeRecordByUid(did, id);
+        } else {
+            text = "删除失败";
+        }
+
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                Toast.makeText(MainActivity.this, text, Toast.LENGTH_LONG).show();
             }
         });
     }

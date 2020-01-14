@@ -12,7 +12,7 @@ import java.util.List;
 
 public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = DatabaseHelper.class.getName();
-    private static final String DATABASE_NAME = "moments.db";
+    public static String DATABASE_NAME = "moments.db";
     private static final int VERSION = 1;
 
     private static DatabaseHelper sInstance;
@@ -74,6 +74,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     public MomentsItem getMyMoments() {
         String sql = "select * from " + MomentsTable.NAME + " where " + MomentsTable.OWNER + " = \"true\"";
+        Log.d(TAG, sql);
         SQLiteDatabase db = getDb();
         Cursor cursor = db.rawQuery(sql, null);
         if (!cursor.moveToFirst()) return null;
@@ -85,6 +86,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     public List<MomentsItem> getFollowList() {
         String sql = "select * from " + MomentsTable.NAME + " where " + MomentsTable.OWNER + "=\"false\"";
+        Log.d(TAG, sql);
         Cursor cursor = getDb().rawQuery(sql, null);
         if (cursor.getCount() == 0) return new ArrayList<>();
 
@@ -108,13 +110,97 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     public void removeMoments(String did) {
         String sql = "delete from " + MomentsTable.NAME + " where " + MomentsTable.DID + "=\"" + did + "\";";
+        Log.d(TAG, sql);
         getDb().execSQL(sql);
     }
 
     public void updateMomentsStatus(String did, String status) {
         String sql = "update " + MomentsTable.NAME + " set " + MomentsTable.STATUS
                     + "=\"" + status + "\" where " + MomentsTable.DID + "=\"" + did + "\";";
+        Log.d(TAG, sql);
         getDb().execSQL(sql);
+    }
+
+    public long insertRecord(Record record) {
+        ContentValues values = new ContentValues();
+        values.put(MomentsListTable.DID, record.did);
+        values.put(MomentsListTable.UID, record.uid);
+        values.put(MomentsListTable.TYPE, record.type);
+        values.put(MomentsListTable.TIME, record.time);
+        values.put(MomentsListTable.CONTENT, record.content);
+        values.put(MomentsListTable.FILES, record.files);
+        values.put(MomentsListTable.ACCESS, record.access);
+
+        return getDb().insertWithOnConflict(MomentsListTable.NAME, null, values, SQLiteDatabase.CONFLICT_REPLACE);
+    }
+
+    public void updateRecord(Record record) {
+        String sql = "update " + MomentsListTable.NAME + " set " + MomentsListTable.TYPE
+                + "=" + record.type + "," + MomentsListTable.CONTENT + "=\"" + record.content
+                + "\"," + MomentsListTable.FILES + "=\"" + record.files + "\","
+                + "\"," + MomentsListTable.ACCESS + "=\"" + record.access
+                + "\" where " + MomentsListTable.DID + "=\"" + record.did + "\" and "
+                + MomentsListTable.UID + "=" + record.uid + " and "
+                + MomentsListTable.TIME + "=" + record.time;
+        Log.d(TAG, sql);
+        getDb().execSQL(sql);
+    }
+
+    public void updateRecordUid(String did, long time, int uid) {
+        String sql = "update " + MomentsListTable.NAME + " set " + MomentsListTable.UID
+                + "=" + uid + " where " + MomentsListTable.DID + "=\"" + did + "\" and "
+                + MomentsListTable.TIME + "=" +time;
+        Log.d(TAG, sql);
+        getDb().execSQL(sql);
+    }
+
+    public void removeRecord(String did, long time) {
+        String sql = "delete from " + MomentsListTable.NAME +
+                " where " + MomentsListTable.DID + "=\"" + did + "\" and "
+                + MomentsListTable.TIME + "=" + time;
+        Log.d(TAG, sql);
+        getDb().execSQL(sql);
+    }
+
+    public void removeRecordByUid(String did, int uid) {
+        String sql = "delete from " + MomentsListTable.NAME +
+                " where " + MomentsListTable.DID + "=\"" + did + "\" and "
+                + MomentsListTable.UID + "=" + uid;
+        Log.d(TAG, sql);
+        getDb().execSQL(sql);
+    }
+
+    public List<Record> getRecordList(String did) {
+        String sql = "select * from " + MomentsListTable.NAME
+                + " where " + MomentsListTable.DID + "=\"" + did + "\" order by "
+                + MomentsListTable.TIME + " desc";
+        Log.d(TAG, sql);
+
+        Cursor cursor = getDb().rawQuery(sql, null);
+        if (cursor.getCount() == 0) return new ArrayList<>();
+
+        ArrayList<Record> list = new ArrayList<>();
+        while (cursor.moveToNext()) {
+            list.add(getRecordFromCursor(cursor));
+        }
+
+        cursor.close();
+        return list;
+    }
+
+    private Record getRecordFromCursor(Cursor cursor) {
+        Record record = new Record();
+
+        record.id = cursor.getInt(cursor.getColumnIndex(MomentsListTable.ID));
+        record.did = cursor.getString(cursor.getColumnIndex(MomentsListTable.DID));
+        record.type = cursor.getInt(cursor.getColumnIndex(MomentsListTable.TYPE));
+        record.uid = cursor.getInt(cursor.getColumnIndex(MomentsListTable.UID));
+        record.content = cursor.getString(cursor.getColumnIndex(MomentsListTable.CONTENT));
+        record.time = cursor.getLong(cursor.getColumnIndex(MomentsListTable.TIME));
+        record.files = cursor.getString(cursor.getColumnIndex(MomentsListTable.FILES));
+        record.access = cursor.getString(cursor.getColumnIndex(MomentsListTable.ACCESS));
+
+        return record;
     }
 
     private SQLiteDatabase getDb() {
@@ -124,6 +210,16 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         }
 
         return mDb;
+    }
+
+    public void Close() {
+        getDb().close();
+    }
+
+    public void clear() {
+        SQLiteDatabase db = getDb();
+        db.execSQL("delete from " + MomentsTable.NAME);
+        db.execSQL("delete from " + MomentsListTable.NAME);
     }
 
     private final class MomentsTable {

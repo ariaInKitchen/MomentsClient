@@ -1,5 +1,9 @@
 <resources>
     <string name="app_name">朋友圈</string>
     <string name="action_settings">设置</string>
+    <string name="action_create">创建朋友圈</string>
     <string name="action_follow">加关注</string>
+    <string name="action_add">发布</string>
+    <string name="action_create_account">创建新用户</string>
+    <string name="action_did">我的DID</string>
 </resources>
