@@ -7,4 +7,5 @@
     <string name="action_create_account">创建新用户</string>
     <string name="action_did">我的DID</string>
     <string name="action_clear">清空</string>
+    <string name="action_unFollow">取消关注</string>
 </resources>

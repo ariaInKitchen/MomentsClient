@@ -109,6 +109,10 @@ public class MomentsClient {
         return addFriend(did, "follow");
     }
 
+    public int unFollow(String did) {
+        return mConnector.removeFriend(did);
+    }
+
     private int addFriend(String did, String command) {
         ContactInterface.Status status = mConnector.getStatus();
         if (status != ContactInterface.Status.Online) {

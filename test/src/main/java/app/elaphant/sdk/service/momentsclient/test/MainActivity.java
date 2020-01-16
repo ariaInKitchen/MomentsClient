@@ -318,7 +318,7 @@ public class MainActivity extends AppCompatActivity {
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
                 Intent intent = new Intent(MainActivity.this, RecordsActivity.class);
                 intent.putExtra(RecordsActivity.MOMENTS_ITEM, new Gson().toJson(mFollowList.get(position)));
-                startActivity(intent);
+                startActivityForResult(intent, RecordsActivity.REQUEST_RECORD_LIST);
             }
         });
 
@@ -355,6 +355,9 @@ public class MainActivity extends AppCompatActivity {
         mMyMoments.mStatus = "waiting";
         mMyMoments.mIsOwner = true;
         mMyMoments.mIsPrivate = false;
+
+        mMomentsText.setText(did);
+        mStatusText.setText(mMyMoments.mStatus);
 
         mDbHelper.insertMoments(mMyMoments);
     }
@@ -670,38 +673,51 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        if (resultCode != Activity.RESULT_OK) {
-            Log.d(TAG,"COULD NOT GET A GOOD RESULT.");
-            if(data == null)
-                return;
-            //Getting the passed result
-            String result = data.getStringExtra("com.blikoon.qrcodescanner.error_decoding_image");
-            if (result != null) {
-                AlertDialog alertDialog = new AlertDialog.Builder(MainActivity.this).create();
-                alertDialog.setTitle("Scan Error");
-                alertDialog.setMessage("QR Code could not be scanned");
-                alertDialog.setButton(AlertDialog.BUTTON_NEUTRAL, "OK",
-                        new DialogInterface.OnClickListener() {
-                            public void onClick(DialogInterface dialog, int which) {
-                                dialog.dismiss();
-                            }
-                        });
-                alertDialog.show();
-            }
-            return;
-        }
-
         if (requestCode == REQUEST_CODE_QR_SCAN) {
-            if(data==null)
+            if (resultCode != Activity.RESULT_OK) {
+                Log.d(TAG,"COULD NOT GET A GOOD RESULT.");
+                if(data == null)
+                    return;
+                //Getting the passed result
+                String result = data.getStringExtra("com.blikoon.qrcodescanner.error_decoding_image");
+                if (result != null) {
+                    AlertDialog alertDialog = new AlertDialog.Builder(MainActivity.this).create();
+                    alertDialog.setTitle("Scan Error");
+                    alertDialog.setMessage("QR Code could not be scanned");
+                    alertDialog.setButton(AlertDialog.BUTTON_NEUTRAL, "OK",
+                            new DialogInterface.OnClickListener() {
+                                public void onClick(DialogInterface dialog, int which) {
+                                    dialog.dismiss();
+                                }
+                            });
+                    alertDialog.show();
+                }
                 return;
-            //Getting the passed result
-            String result = data.getStringExtra("com.blikoon.qrcodescanner.got_qr_scan_relult");
-            Log.d(TAG,"Have scan result in your app activity :"+ result);
-            if (result.isEmpty()) return;
-            if (mType.equals("create")) {
-                createMoments(result);
-            } else if (mType.equals("follow")) {
-                followMoments(result);
+            } else {
+                if(data==null)
+                    return;
+                //Getting the passed result
+                String result = data.getStringExtra("com.blikoon.qrcodescanner.got_qr_scan_relult");
+                Log.d(TAG,"Have scan result in your app activity :"+ result);
+                if (result.isEmpty()) return;
+                if (mType.equals("create")) {
+                    createMoments(result);
+                } else if (mType.equals("follow")) {
+                    followMoments(result);
+                }
+            }
+        } else if (requestCode == RecordsActivity.REQUEST_RECORD_LIST) {
+            if (resultCode == RecordsActivity.RESULT_UNFOLLOW && data != null) {
+                String did = data.getStringExtra(RecordsActivity.UNFOLLOW_DID);
+                mDbHelper.removeMoments(did);
+                for (MomentsItem item : mFollowList) {
+                    if (item.mDid.equals(did)) {
+                        mFollowList.remove(item);
+                        mAdapter.remove(item);
+                        mAdapter.notifyDataSetChanged();
+                        break;
+                    }
+                }
             }
         }
     }

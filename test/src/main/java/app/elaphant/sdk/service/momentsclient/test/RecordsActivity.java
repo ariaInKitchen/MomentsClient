@@ -13,6 +13,7 @@ import android.view.View;
 import android.widget.AdapterView;
 import android.widget.EditText;
 import android.widget.ListView;
+import android.widget.Toast;
 
 import com.google.gson.Gson;
 
@@ -26,6 +27,10 @@ public class RecordsActivity extends AppCompatActivity {
     private static final String TAG = RecordsActivity.class.getName();
 
     public static final String MOMENTS_ITEM = "moments_item";
+
+    public static final int REQUEST_RECORD_LIST = 1001;
+    public static final int RESULT_UNFOLLOW = 200;
+    public static final String UNFOLLOW_DID = "unFollow_did";
 
     private MomentsItem mItem;
     private DatabaseHelper mDbHelper = DatabaseHelper.getInstance(this);
@@ -65,9 +70,14 @@ public class RecordsActivity extends AppCompatActivity {
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu; this adds items to the action bar if it is present.
-        if (mItem == null || !mItem.mIsOwner) return false;
+        if (mItem == null) return false;
 
-        getMenuInflater().inflate(R.menu.menu_record, menu);
+        if (mItem.mIsOwner) {
+            getMenuInflater().inflate(R.menu.menu_record, menu);
+        } else {
+            getMenuInflater().inflate(R.menu.menu_follow_record, menu);
+        }
+
         return true;
     }
 
@@ -84,6 +94,8 @@ public class RecordsActivity extends AppCompatActivity {
             return true;
         } else if (id == R.id.action_clear) {
             clear();
+        } else if (id == R.id.action_unFollow) {
+            unFollow();
         }
 
         return super.onOptionsItemSelected(item);
@@ -221,5 +233,39 @@ public class RecordsActivity extends AppCompatActivity {
 
         mAdapter.clear();
         mAdapter.notifyDataSetChanged();
+    }
+
+    private void unFollow() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("取消关注？");
+        builder.setPositiveButton("Ok", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                dialog.dismiss();
+                doUnFollow();
+            }
+        });
+        builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                dialog.dismiss();
+            }
+        });
+        builder.create().show();
+    }
+
+    private void doUnFollow() {
+        int ret = mClient.unFollow(mItem.mDid);
+        if (ret < 0) {
+            Log.e(TAG, "unFollow " + mItem.mDid + " failed " + ret);
+            Toast.makeText(this, "取消关注失败", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        mDbHelper.removeRecords(mItem.mDid);
+        Intent intent = new Intent();
+        intent.putExtra(UNFOLLOW_DID, mItem.mDid);
+        setResult(RESULT_UNFOLLOW, intent);
+        finish();
     }
 }
