@@ -9,7 +9,6 @@ import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.provider.Settings;
-import android.support.design.widget.FloatingActionButton;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
@@ -27,11 +26,14 @@ import com.google.gson.Gson;
 
 import org.elastos.sdk.elephantwallet.contact.Contact;
 import org.elastos.sdk.elephantwallet.contact.Utils;
+import org.elastos.sdk.elephantwallet.contact.internal.ContactInterface;
 import org.elastos.sdk.keypair.ElastosKeypair;
 import org.elastos.sdk.keypair.ElastosKeypairDID;
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import app.elaphant.sdk.peernode.PeerNode;
@@ -57,6 +59,9 @@ public class MainActivity extends AppCompatActivity {
 
     private MomentsItem mMyMoments;
     private List<MomentsItem> mFollowList;
+    private List<MomentsItem> mUpdateList = new ArrayList<>();
+    private boolean mExit = false;
+    private Thread mThread;
 
     private TextView mMomentsText;
     private TextView mStatusText;
@@ -82,16 +87,25 @@ public class MainActivity extends AppCompatActivity {
             DatabaseHelper.DATABASE_NAME = "moments_" + did + ".db";
         }
         mDbHelper = DatabaseHelper.getInstance(this);
+        mThread = new Thread(runnable);
 
         InitPeerNode();
         InitMoments();
         InitView();
+        mThread.start();
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        mExit = true;
         mPeerNode.stop();
+        try {
+            mThread.join();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
     }
 
     @Override
@@ -221,7 +235,9 @@ public class MainActivity extends AppCompatActivity {
         mMomentsClient.setListener(new MomentsClient.Listener() {
             @Override
             public void onPushData(String did, int type, JSONArray array) {
-
+                if (type == 0) {
+                    handlePushData(did, array);
+                }
             }
 
             @Override
@@ -241,7 +257,7 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onGetDataList(String did, JSONArray array) {
-
+                handleDataList(did, array);
             }
 
             @Override
@@ -256,7 +272,7 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onClearResult(String did, int result) {
-
+                handleClearResult(did, result);
             }
 
             @Override
@@ -379,6 +395,13 @@ public class MainActivity extends AppCompatActivity {
                         }
                         item.mStatus = status.toString();
                         mAdapter.notifyDataSetChanged();
+
+                        if (status == ContactInterface.Status.Online) {
+                            synchronized (mUpdateList) {
+                                mUpdateList.add(item);
+                                mUpdateList.notify();
+                            }
+                        }
                         break;
                     }
                 }
@@ -553,6 +576,98 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    private void handleClearResult(String did, int result) {
+        if (mMyMoments == null || !did.equals(mMyMoments.mDid)) {
+            Log.e(TAG, "publish result from moments " + did + " not mine");
+            return;
+        }
+        final String text;
+        if (result == 0) {
+            text = "清空朋友圈成功";
+            mDbHelper.removeRecords(did);
+        } else {
+            text = "清空朋友圈失败";
+        }
+
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                Toast.makeText(MainActivity.this, text, Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    private void handlePushData(final String did, JSONArray array) {
+        int len = array.length();
+        try {
+            for (int i = 0; i < len; i++) {
+                JSONObject obj = array.getJSONObject(i);
+                int id = obj.getInt("id");
+                long time = obj.getLong("time");
+                final Record record = new Record();
+                record.did = did;
+                record.uid = id;
+                record.time = time;
+                record.content = "";
+                mDbHelper.insertRecord(record);
+            }
+
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+
+        for (MomentsItem item : mFollowList) {
+            if (item.mDid.equals(did)) {
+                synchronized (mUpdateList) {
+                    mUpdateList.add(item);
+                    mUpdateList.notify();
+                }
+                break;
+            }
+        }
+
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                Toast.makeText(MainActivity.this, did + " 发布了新内容", Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    private void handleDataList(String did, JSONArray array) {
+        int len = array.length();
+        if (len == 0) return;
+        List<Record> list = new ArrayList<>();
+        try {
+            long last = 0;
+            for (int i = 0;  i < len; i++) {
+                JSONObject obj = array.getJSONObject(i);
+                Record record = new Record();
+                record.did = did;
+                record.type = obj.getInt("type");
+                record.content = obj.getString("content");
+                record.time = obj.getLong("time");
+                if (i == 0) {
+                    last = record.time;
+                }
+                record.access = obj.getString("access");
+
+                list.add(record);
+            }
+            mDbHelper.updateRecordList(list);
+            mDbHelper.updateMomentsRecord(did, last);
+
+            for (MomentsItem item : mFollowList) {
+                if (item.mDid.equals(did)) {
+                    item.mRecord = last;
+                    break;
+                }
+            }
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+    }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (resultCode != Activity.RESULT_OK) {
@@ -590,4 +705,26 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     }
+
+    Runnable runnable = new Runnable() {
+        @Override
+        public void run() {
+            while (true) {
+                synchronized (mUpdateList) {
+                    for (MomentsItem item : mUpdateList) {
+                        mMomentsClient.getDataList(item.mDid, item.mRecord);
+                    }
+                    mUpdateList.clear();
+                    try {
+                        mUpdateList.wait();
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+
+                if (mExit) break;
+            }
+
+        }
+    };
 }

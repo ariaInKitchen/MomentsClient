@@ -82,6 +82,8 @@ public class RecordsActivity extends AppCompatActivity {
         if (id == R.id.action_add) {
             publish();
             return true;
+        } else if (id == R.id.action_clear) {
+            clear();
         }
 
         return super.onOptionsItemSelected(item);
@@ -188,6 +190,36 @@ public class RecordsActivity extends AppCompatActivity {
         }
 
         mAdapter.remove(record);
+        mAdapter.notifyDataSetChanged();
+    }
+
+    private void clear() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("确定要清空所有数据？");
+        builder.setPositiveButton("Ok", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                dialog.dismiss();
+                doClear();
+            }
+        });
+        builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                dialog.dismiss();
+            }
+        });
+        builder.create().show();
+    }
+
+    private void doClear() {
+        int ret = mClient.clear(mItem.mDid);
+        if (ret != 0) {
+            Log.e(TAG, "clear moments failed " + ret);
+            return;
+        }
+
+        mAdapter.clear();
         mAdapter.notifyDataSetChanged();
     }
 }

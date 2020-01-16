@@ -13,7 +13,7 @@ import java.util.List;
 public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String TAG = DatabaseHelper.class.getName();
     public static String DATABASE_NAME = "moments.db";
-    private static final int VERSION = 1;
+    private static final int VERSION = 2;
 
     private static DatabaseHelper sInstance;
 
@@ -24,15 +24,16 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             + MomentsTable.DID + " text not null,"
             + MomentsTable.STATUS + " text not null,"
             + MomentsTable.OWNER + " text,"
-            + MomentsTable.PRIVATE + " text);";
+            + MomentsTable.PRIVATE + " text,"
+            + MomentsTable.RECORD + " integer);";
 
     private static final String MOMENTS_LIST_TABLE = "create table " + MomentsListTable.NAME + "("
             + MomentsListTable.ID + " integer primary key autoincrement,"
             + MomentsListTable.DID + " text not null,"
             + MomentsListTable.UID + " integer not null,"
-            + MomentsListTable.TYPE + " integer not null,"
-            + MomentsListTable.CONTENT + " text not null,"
-            + MomentsListTable.TIME + " integer not null,"
+            + MomentsListTable.TYPE + " integer,"
+            + MomentsListTable.CONTENT + " text,"
+            + MomentsListTable.TIME + " integer,"
             + MomentsListTable.FILES + " text,"
             + MomentsListTable.ACCESS + " text);";
 
@@ -52,14 +53,17 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     @Override
     public void onCreate(SQLiteDatabase db) {
         Log.d(TAG, "on create");
-        Log.d(TAG, MOMENTS_TABLE);
         db.execSQL(MOMENTS_TABLE);
         db.execSQL(MOMENTS_LIST_TABLE);
     }
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-
+        Log.d(TAG, "old version " + oldVersion);
+        Log.d(TAG, "new version " + newVersion);
+        if (oldVersion == 1) {
+            db.execSQL("alter table " + MomentsTable.NAME + " add " + MomentsTable.RECORD + " integer");
+        }
     }
 
     public long insertMoments(MomentsItem item) {
@@ -68,6 +72,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         values.put(MomentsTable.STATUS, item.mStatus);
         values.put(MomentsTable.OWNER, item.mIsOwner.toString());
         values.put(MomentsTable.PRIVATE, item.mIsPrivate.toString());
+        values.put(MomentsTable.RECORD, item.mRecord);
 
         return getDb().insertWithOnConflict(MomentsTable.NAME, null, values, SQLiteDatabase.CONFLICT_REPLACE);
     }
@@ -105,6 +110,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         item.mStatus = cursor.getString(cursor.getColumnIndex(MomentsTable.STATUS));
         item.mIsOwner = Boolean.valueOf(cursor.getString(cursor.getColumnIndex(MomentsTable.OWNER)));
         item.mIsPrivate = Boolean.valueOf(cursor.getString(cursor.getColumnIndex(MomentsTable.PRIVATE)));
+        item.mRecord = cursor.getLong(cursor.getColumnIndex(MomentsTable.RECORD));
         return item;
     }
 
@@ -117,6 +123,13 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     public void updateMomentsStatus(String did, String status) {
         String sql = "update " + MomentsTable.NAME + " set " + MomentsTable.STATUS
                     + "=\"" + status + "\" where " + MomentsTable.DID + "=\"" + did + "\";";
+        Log.d(TAG, sql);
+        getDb().execSQL(sql);
+    }
+
+    public void updateMomentsRecord(String did, long time) {
+        String sql = "update " + MomentsTable.NAME + " set " + MomentsTable.RECORD
+                + "=" + time + " where " + MomentsTable.DID + "=\"" + did + "\";";
         Log.d(TAG, sql);
         getDb().execSQL(sql);
     }
@@ -135,15 +148,36 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     public void updateRecord(Record record) {
-        String sql = "update " + MomentsListTable.NAME + " set " + MomentsListTable.TYPE
-                + "=" + record.type + "," + MomentsListTable.CONTENT + "=\"" + record.content
-                + "\"," + MomentsListTable.FILES + "=\"" + record.files + "\","
-                + "\"," + MomentsListTable.ACCESS + "=\"" + record.access
-                + "\" where " + MomentsListTable.DID + "=\"" + record.did + "\" and "
-                + MomentsListTable.UID + "=" + record.uid + " and "
-                + MomentsListTable.TIME + "=" + record.time;
+//        String sql = "update " + MomentsListTable.NAME + " set " + MomentsListTable.TYPE
+//                + "=" + record.type + "," + MomentsListTable.CONTENT + "=\"" + record.content
+//                + "\"," + MomentsListTable.FILES + "=\"" + record.files + "\","
+//                + "\"," + MomentsListTable.ACCESS + "=\"" + record.access
+//                + "\" where " + MomentsListTable.DID + "=\"" + record.did + "\" and "
+//                + MomentsListTable.UID + "=" + record.uid + " and "
+//                + MomentsListTable.TIME + "=" + record.time;
+
+        String sql = "insert or replace into " + MomentsListTable.NAME + " ("
+                + MomentsListTable.ID + "," + MomentsListTable.DID + "," + MomentsListTable.UID
+                + "," + MomentsListTable.TYPE + "," + MomentsListTable.CONTENT + ","
+                + MomentsListTable.TIME + "," + MomentsListTable.FILES + ","
+                + MomentsListTable.ACCESS + ") values ("
+                + "(select id from " + MomentsListTable.NAME + " where " + MomentsListTable.DID
+                + "=\"" + record.did + "\" and " + MomentsListTable.TIME + "=" + record.time
+                + "),\"" + record.did + "\"," + record.uid + "," + record.type + ",\""
+                + record.content + "\"," + record.time + ",\"" + record.files + "\",\""
+                + record.access + "\")";
         Log.d(TAG, sql);
         getDb().execSQL(sql);
+    }
+
+    public void updateRecordList(List<Record> list) {
+        SQLiteDatabase db = getDb();
+        db.beginTransaction();
+        for (Record record : list) {
+            updateRecord(record);
+        }
+        db.setTransactionSuccessful();
+        db.endTransaction();
     }
 
     public void updateRecordUid(String did, long time, int uid) {
@@ -166,6 +200,13 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         String sql = "delete from " + MomentsListTable.NAME +
                 " where " + MomentsListTable.DID + "=\"" + did + "\" and "
                 + MomentsListTable.UID + "=" + uid;
+        Log.d(TAG, sql);
+        getDb().execSQL(sql);
+    }
+
+    public void removeRecords(String did) {
+        String sql = "delete from " + MomentsListTable.NAME +
+                " where " + MomentsListTable.DID + "=\"" + did + "\"";
         Log.d(TAG, sql);
         getDb().execSQL(sql);
     }
@@ -230,6 +271,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         static final String STATUS = "status";
         static final String OWNER = "isOwner";
         static final String PRIVATE = "isPrivate";
+        static final String RECORD = "record";
     }
 
     private final class MomentsListTable {

@@ -218,6 +218,19 @@ public class MomentsClient {
         return -2;
     }
 
+    public int getDataList(String did, long time) {
+        JSONObject content = new JSONObject();
+        try {
+            content.put("command", "getDataList");
+            content.put("time", time);
+            return sendCommand(did, content);
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+
+        return -2;
+    }
+
     private int sendCommand(String friendCode, JSONObject content) throws JSONException {
         ContactInterface.Status status = mConnector.getStatus();
         if (status != ContactInterface.Status.Online) {

@@ -5,4 +5,5 @@ public class MomentsItem {
     String mStatus;
     Boolean mIsPrivate;
     Boolean mIsOwner;
+    long mRecord;
 }
